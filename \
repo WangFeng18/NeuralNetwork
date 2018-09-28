@@ -1,0 +1,124 @@
+import numpy as np
+
+# fc layer implementation
+class Layer(object):
+    def update(self, lr):
+        for i in range(len(self.parameters)):
+            self.parameters[i] -= lr * self.gradient_wrt_parameters[i]
+
+class Container(object):
+    def __init__(self, *layers):
+        self.layers = layers
+
+    def forward(self, data_input):
+        for layer in self.layers:
+            data_input = layer.forward(data_input)
+        return data_input
+
+    def backward(self, gradient_wrt_output):
+        for layer in self.layers[::-1]:
+            gradient_wrt_output = layer.backward(gradient_wrt_output)
+
+    def update(self, lr):
+        for layer in self.layers:
+            layer.update(lr)
+
+    def __str__(self):
+        str = ''
+        for layer in self.layers:
+            str += layer.__str__()
+        return str
+            
+
+class FC(Layer):
+    def __init__(self, num_in, num_out):
+        self.num_in = num_in
+        self.num_out = num_out
+        self.parameters = []
+        weight = np.random.rand(num_in, num_out)
+        bias = np.zeros((1, num_out), dtype=float)
+        self.parameters.append(weight)
+        self.parameters.append(bias)
+
+    def forward(self, data):
+        self.data = data
+        self.output = np.dot(self.data, self.parameters[0]) + self.parameters[1]
+        return self.output
+
+    def backward(self, gradient_wrt_output):
+        self.gradient_wrt_parameters = []
+        self.gradient_wrt_parameters.append(np.dot(self.data.T, gradient_wrt_output))
+        self.gradient_wrt_parameters.append(gradient_wrt_output.sum(axis=0).reshape(1,-1))
+        self.gradient_wrt_input = np.dot(gradient_wrt_output, self.parameters[0].T)
+        return self.gradient_wrt_input
+
+    def __str__(self):
+        str = ''
+        str +=  '--------FC_layer--------\n'
+        str += 'weight shape: {}'.format(self.parameters[0].shape)+'\n'
+        str += 'bias   shape: {}'.format(self.parameters[1].shape)+'\n'
+        str += 'weight      : {}'.format(self.parameters[0])+'\n'
+        str += 'bias        : {}'.format(self.parameters[1])+'\n'
+        str += '------------------------\n'
+        return str
+
+class MSELoss(object):
+    def __init__(self):
+        pass
+    
+    def forward(self, data, gt):
+        self.data = data
+        self.gt = gt
+        self.n_data_elements = reduce(lambda x, y:x*y, data.shape)
+        self.output = ((self.data-self.gt)**2).mean()
+        return self.output
+    
+    def backward(self, gradient_wrt_output):
+        assert gradient_wrt_output is None
+        self.gradient_wrt_input = 2*(self.data-self.gt)/self.n_data_elements
+        return self.gradient_wrt_input
+
+class ReLU(object):
+    def __init__(self):
+        pass
+    
+    def forward(self, data):
+        self.data = data
+        self.output = np.maximum(self.data, 0)
+        return self.output
+
+    def backward(self, gradient_wrt_output):
+        self.gradient_wrt_input = gradient_wrt_output * (self.output != np.zeros_like(self.output)).astype(np.float)
+        return self.gradient_wrt_input
+
+class Sigmoid(object):
+    def __init__(self):
+        pass
+
+    def forward(self, data):
+        self.data = data
+        self.output = 1./(1+np.exp(-self.data))
+        #print self.output
+        return self.output
+
+    def backward(self, gradient_wrt_output):
+        self.gradient_wrt_input = gradient_wrt_output * self.output * (1. - self.output)
+        return self.gradient_wrt_input
+
+if __name__ == __main__:
+    data = np.linspace(-1, 1, 100).reshape(-1,1)
+    y = data*3 + np.random.randn(100,1)*0.5
+    net = Container(FC(1,1), FC(1,1))
+    loss = MSELoss()
+    lr = 0.1
+
+    for i in range(1000):
+        o = net.forward(data)
+        l = loss.forward(o, y)
+        g = loss.backward(None)
+        net.backward(g)
+        print('{}'.format(l))
+        net.update(lr)
+
+    print net
+
